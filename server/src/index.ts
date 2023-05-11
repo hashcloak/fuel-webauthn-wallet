@@ -14,6 +14,8 @@ import session from 'express-session';
 import memoryStore from 'memorystore';
 import dotenv from 'dotenv';
 import base64url from 'base64url';
+import { AsnParser } from '@peculiar/asn1-schema';
+import { ECDSASigValue } from '@peculiar/asn1-ecc';
 
 dotenv.config();
 
@@ -25,7 +27,7 @@ import {
   generateAuthenticationOptions,
   verifyAuthenticationResponse,
 } from '@simplewebauthn/server';
-import { isoUint8Array } from '@simplewebauthn/server/helpers';
+import { isoBase64URL, isoUint8Array, toHash } from '@simplewebauthn/server/helpers';
 import type {
   GenerateRegistrationOptionsOpts,
   GenerateAuthenticationOptionsOpts,
@@ -42,6 +44,7 @@ import type {
 } from '@simplewebauthn/typescript-types';
 
 import { LoggedInUser } from './example-server';
+import { fromUTF8String } from '@simplewebauthn/server/dist/helpers/iso/isoUint8Array';
 
 const app = express();
 const MemoryStore = memoryStore(session);
@@ -227,6 +230,26 @@ app.get('/generate-authentication-options', (req, res) => {
   res.send(options);
 });
 
+
+// Helper functions from @simplewebauthn/server
+function shouldRemoveLeadingZero(bytes: Uint8Array): boolean {
+  return bytes[0] === 0x0 && (bytes[1] & (1 << 7)) !== 0;
+}
+
+function concat(arrays: Uint8Array[]): Uint8Array {
+  let pointer = 0;
+  const totalLength = arrays.reduce((prev, curr) => prev + curr.length, 0);
+
+  const toReturn = new Uint8Array(totalLength);
+
+  arrays.forEach((arr) => {
+    toReturn.set(arr, pointer);
+    pointer += arr.length;
+  });
+
+  return toReturn;
+}
+
 app.post('/verify-authentication', async (req, res) => {
   const body: AuthenticationResponseJSON = req.body;
 
@@ -258,7 +281,35 @@ app.post('/verify-authentication', async (req, res) => {
       authenticator: dbAuthenticator,
       requireUserVerification: true,
     };
+
+    // Extracting signature
+    const authDataBuffer = isoBase64URL.toBuffer(body.response.authenticatorData);
+    const clientDataHash = await toHash(base64url.toBuffer(body.response.clientDataJSON));
+
+    const signatureBase = concat([authDataBuffer, clientDataHash]);
+
+    // 2. Retrieving the r and s values, see https://github.com/MasterKale/SimpleWebAuthn/blob/6f363aa53a69cf8c1ea69664924c1e9f8e19dc4e/packages/server/src/helpers/iso/isoCrypto/verifyEC2.ts#L103
+    const parsedSignature = AsnParser.parse(
+      base64url.toBuffer(body.response.signature),
+      ECDSASigValue,
+    );
+    let rBytes = new Uint8Array(parsedSignature.r);
+    let sBytes = new Uint8Array(parsedSignature.s);
+
+    console.log(body.response.signature);
+    console.log(rBytes);
+    console.log(sBytes);
+
+    if (shouldRemoveLeadingZero(rBytes)) {
+      rBytes = rBytes.slice(1);
+    }
+
+    if (shouldRemoveLeadingZero(sBytes)) {
+      sBytes = sBytes.slice(1);
+    }
+
     verification = await verifyAuthenticationResponse(opts);
+
   } catch (error) {
     const _error = error as Error;
     console.error(_error);

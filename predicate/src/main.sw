@@ -1,15 +1,10 @@
 predicate;
 
-struct Validation {
-    has_account: bool,
-    total_complete: u64,
+configurable {
+    PUBKEY: [u8; 72] = [0u8; 72]
 }
 
-// TODO add actual predicate, this is just a temporary example. 
-// Doc ref: https://fuellabs.github.io/fuels-ts/guide/predicates/
-fn main(received: Validation) -> bool {
-    let expected_has_account: bool = true;
-    let expected_total_complete: u64 = 100;
-
-    received.has_account == expected_has_account && received.total_complete == expected_total_complete
+// TODO this should verify signature for pubkey
+fn main(pubkey: [u8; 72]) -> bool {
+    PUBKEY[0] == pubkey[0]
 }

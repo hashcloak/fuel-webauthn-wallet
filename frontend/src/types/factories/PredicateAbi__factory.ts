@@ -4,42 +4,27 @@
 /* eslint-disable */
 
 /*
-  Fuels version: 0.41.0
+  Fuels version: 0.42.0
   Forc version: 0.35.5
   Fuel-Core version: 0.17.3
 */
 
 import {
   BigNumberish,
-  BN,
   Predicate,
   Provider,
 } from 'fuels';
 
-export type ValidationInput = { has_account: boolean, total_complete: BigNumberish };
-export type ValidationOutput = { has_account: boolean, total_complete: BN };
-
-type PredicateAbiInputs = [received: ValidationInput];
+type PredicateAbiInputs = [pubkey: [BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish, BigNumberish]];
 
 const _abi = {
   "types": [
     {
       "typeId": 0,
-      "type": "bool",
-      "components": null,
-      "typeParameters": null
-    },
-    {
-      "typeId": 1,
-      "type": "struct Validation",
+      "type": "[_; 72]",
       "components": [
         {
-          "name": "has_account",
-          "type": 0,
-          "typeArguments": null
-        },
-        {
-          "name": "total_complete",
+          "name": "__array_element",
           "type": 2,
           "typeArguments": null
         }
@@ -47,8 +32,14 @@ const _abi = {
       "typeParameters": null
     },
     {
+      "typeId": 1,
+      "type": "bool",
+      "components": null,
+      "typeParameters": null
+    },
+    {
       "typeId": 2,
-      "type": "u64",
+      "type": "u8",
       "components": null,
       "typeParameters": null
     }
@@ -57,15 +48,15 @@ const _abi = {
     {
       "inputs": [
         {
-          "name": "received",
-          "type": 1,
+          "name": "pubkey",
+          "type": 0,
           "typeArguments": null
         }
       ],
       "name": "main",
       "output": {
         "name": "",
-        "type": 0,
+        "type": 1,
         "typeArguments": null
       },
       "attributes": null
@@ -73,10 +64,20 @@ const _abi = {
   ],
   "loggedTypes": [],
   "messagesTypes": [],
-  "configurables": []
+  "configurables": [
+    {
+      "name": "PUBKEY",
+      "configurableType": {
+        "name": "",
+        "type": 0,
+        "typeArguments": null
+      },
+      "offset": 152
+    }
+  ]
 }
 
-const _bin = '0x9000000447000000000000000000008c5dfcc00110fff30071480003614521017344000b614d210d9000001272400002134114005a41000173400011614d211f90000012240000001a4450009100003072400010284534005d411000134100407340001a90000021504510107240001028453400504110085d4500005d43f0001341140024400000470000000000000000000064'
+const _bin = '0x900000044700000000000000000000985dfcc00110fff30071480003614521017344000b6151210d9000001272400002134114005a410001734000116151211f90000012240000001a485000910004805d47f048104513007240024028491400724000081b400400104124005d4d0000504522407240024028454400724000081b400400104114005d4100001341340024400000470000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000098'
 
 export class PredicateAbi__factory {
 

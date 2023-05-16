@@ -2,78 +2,11 @@ import React, { useEffect, useState } from "react";
 import "@fuel-wallet/sdk";
 import "./App.css";
 import { startRegistration, startAuthentication } from "@simplewebauthn/browser";
-import { Account, NativeAssetId, Provider, Wallet, WalletLocked } from "fuels";
+import { Account, JsonFlatAbi, NativeAssetId, Predicate, Provider, Wallet, WalletLocked, WalletUnlocked, getRandomB256, hexlify } from "fuels";
 import { PredicateAbi__factory } from './types';
 
 
 function App() {
-  const [connected, setConnected] = useState<boolean>(false);
-  const [account, setAccount] = useState<string>("");
-  const [counter, setCounter] = useState<number>(0);
-  const [loaded, setLoaded] = useState(false);
-  
-  useEffect(() => {
-    setTimeout(() => {
-      checkConnection();
-      setLoaded(true);
-    }, 200)
-
-  }, [connected])
-
-
-  async function connect() {
-    // Connect to testnet beta-3
-    const provider = new Provider('https://beta-3.fuel.network/graphql');
-    const predicate = PredicateAbi__factory.createInstance(provider);
-    console.log(predicate.address.toB256());
-
-    if (window.fuel) {
-     try {
-        await window.fuel.connect();
-        const [account] = await window.fuel.accounts();
-        const wallet = await window.fuel!.getWallet(account);
-        // Fund the predicate
-        const response1 = await wallet.transfer(predicate.address, 100000, NativeAssetId, {
-          gasLimit: 164,
-          gasPrice: 1,
-        });
-        await response1.wait();
-
-        // Try to spend the funds in the predicate
-        const walletBalanceBefore = await wallet.getBalance();
-        console.log("walletBalanceBefore", walletBalanceBefore);
-
-        const tx = await predicate
-          .setData({has_account: true, total_complete: 100})
-          .transfer(wallet.address, 30, NativeAssetId, {
-            gasLimit: 3000,
-            gasPrice: 1,
-          });
-        await tx.waitForResult();
-
-        // This balance should be greater than "walletBalanceBefore", if the predicate was successfully spent
-        const walletBalanceAfter = await wallet.getBalance();
-        console.log("walletBalanceAfter", walletBalanceAfter);
-
-        setAccount(account);
-        setConnected(true);
-     } catch(err) {
-       console.log("error connecting: ", err);
-     }
-    }
-   }
-
-  async function checkConnection() {
-    if (window.fuel) {
-      const isConnected = await window.fuel.isConnected();
-      if (isConnected) {
-        const [account] = await window.fuel.accounts();
-        setAccount(account);
-        setConnected(true);
-      }
-    }
-  }
-
   async function btnRegBegin() {
     fetch("/generate-registration-options")
       .then(async (res) => {
@@ -96,12 +29,29 @@ function App() {
         });
 
         const verificationJSON = await verificationResp.json();
-        console.log(verificationJSON);
+
         if (verificationJSON && verificationJSON.verified) {
           console.log("Registration successful");
         } else {
           console.error("Registration failed");
         }
+
+        let pubkeyArray = [];
+        for (let i = 0; i < 72; i++) {
+          pubkeyArray.push(verificationJSON.pubkey[i]);
+        }
+        console.log(pubkeyArray);
+        
+        // Create Burner Wallet
+        const provider = new Provider('https://beta-3.fuel.network/graphql');
+        const configurable = { PUBKEY: pubkeyArray };
+        const { abi, bin } = PredicateAbi__factory;
+        const predicate = new Predicate(bin, abi, provider, configurable);
+    
+        // set predicate data to be the same as the configurable constant
+        predicate.setData(configurable.PUBKEY);
+
+        console.log("Burner Wallet Address is: " + predicate.address);
       })
       .catch((err) => {
         console.error("Error fetching data:", err);
@@ -139,17 +89,10 @@ function App() {
 
   }
   
-
-
-  if (!loaded) return null
-  
   return (
     <>
       <div className="App">
-        {
-          connected ? (
             <>
-
               <button style={buttonStyle} onClick={btnRegBegin}>
               Register
               </button>
@@ -159,10 +102,6 @@ function App() {
               </button>
 
             </>
-          ) : (
-            <button style={buttonStyle} onClick={connect}>Connect</button>
-          )
-        }
       </div>
     </>
   );

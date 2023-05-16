@@ -6,12 +6,14 @@ Simple webapp that has a connection with the Fuel blockchain (Wallet in browser 
 
 This small app has the following functionality:
 
-- user can connect Fuel wallet in browser to webapp. This will also trigger the funding and spending of a test predicate (this only serves to showcase the predicate functionality)
-- after connecting, user can click Register or Authenticate button
+- user can click on Register, this does registration with WebAuthn and creates a predicate using the public key from WebAuthn
+- user can click on Authentication, this only does authentication with WebAuthn for the moment.
+
+TODO:
+- send funds using Authentication with WebAuthn, which results in a signature, which will be validated by the predicate and makes the transaction valid
 
 Expected workings:
-- click on Connect: should trigger the popup in browser to connect to Fuel wallet. After users connects, a transaction approval is requested which serves to fund the predicate that has been loaded. Finally, the attempt is made to spend the predicate in name of the user, which has a payout for the users
-- click on Register: should give a popup in browser for registration. Successfully going through these steps should give a message in the console "Registration successful"
+- click on Register: should give a popup in browser for registration. Successfully going through these steps should give a message in the console "Registration successful", print the pubkey and create the predicate based on the pubkey
 - click on Authenticate when registered: should give a popup for authentication. Successfully going through these steps should give a message in the console "Authentication successful" 
 - when Registration or Authentication fails it should give that as an error in the console
 
@@ -21,7 +23,7 @@ Expected workings:
 The codebase consists of 3 parts:
 - predicate; this is where the Sway predicate lives. It is a simple example taken from [documentation](https://fuellabs.github.io/fuels-ts/guide/predicates/) for the moment
 - server; this is where the calls to webauthn live. Absolutely not production ready, it even has some hardcoded `expectedOrigin`s. This does registration and authentication, following an example repo
-- frontend; the visual part that ties it all together. Calls both the server that does WebAuthn stuff & the contract onchain
+- frontend; the visual part that ties it all together. Calls both the server that does WebAuthn stuff & creates the predicate that is the burner wallet
 
 
 ### 1. Predicate code
@@ -61,6 +63,8 @@ npm start
 ### 3. Frontend
 
 Tutorial: https://fuelbook.fuel.network/master/quickstart/frontend.html
+
+Needs to run on fuels >= 0.42.0.
 
 Make sure that the typings for the predicate have been generated and that in `frontend/src/types/index.ts` only 1 `PredicateAbi__factory` is exported. 
 Furthermore, the server must be running on 127.0.0.1:8000, if it is somewhere else, this has to be adjusted in `frontend/package.json`, specifically `"proxy": "http://127.0.0.1:8000"`. 

@@ -8,9 +8,12 @@ import { PredicateAbi__factory } from './types';
 
 function App() {
   const [connected, setConnected] = useState<boolean>(false);
-  const [account, setAccount] = useState<string>("");
-  const [counter, setCounter] = useState<number>(0);
+  const [pubKey, setPubKey] = useState<any[]>();
+  const [predicate, setPredicate] = useState<Predicate<any>>();
   const [loaded, setLoaded] = useState(false);
+  const [account, setAccount] = useState<string>("");
+  const [provider, setProvider] = useState<Provider>();
+  const [burnerWalletAddress, setBurnerWalletAddress] = useState<string>("");
 
   useEffect(() => {
     setTimeout(() => {
@@ -20,23 +23,27 @@ function App() {
 
   }, [connected])
 
-  //to use the predicate in different async functions.
-  let pred: any;
-  let pubKey: any;
-
   async function fundPredicate() {
     if (window.fuel) {
      try {
         await window.fuel.connect();
         const [account] = await window.fuel.accounts();
         const wallet = await window.fuel!.getWallet(account);
+
+        const walletPredicate = Wallet.fromAddress(predicate!.address, provider);
+        const initial = await walletPredicate.getBalance();
+        console.log(initial);
+
         // Fund the predicate
-        const response1 = await wallet.transfer(pred.address, 10000, NativeAssetId, {
+        const response1 = await wallet.transfer(predicate!.address, 10000, NativeAssetId, {
           gasLimit: 164,
           gasPrice: 1,
         });
         await response1.wait();
-        console.log("predicateAddress from fundPredicate: " + pred.address);
+        const after = await walletPredicate.getBalance();
+        console.log(after);
+
+        console.log("predicateAddress from fundPredicate: " + predicate?.address);
         setAccount(account);
         setConnected(true);
      } catch(err) {
@@ -45,31 +52,37 @@ function App() {
     }
    }
 
-   async function send(addr: any) {
-    const someAddress = Address.fromDynamicInput(addr);
-    console.log(someAddress);
+   async function send(addr: any, amount: number) {
+    const inputAddress = Address.fromDynamicInput(addr);
+    const walletInputAddress = Wallet.fromAddress(inputAddress, provider);
+    // Print destination wallet balance before transaction
+    const initialBalance = await walletInputAddress.getBalance();
+    console.log(initialBalance);
 
     if (window.fuel) {
      try {
       await window.fuel.connect();
-        // Try to spend the funds in the predicate
-        console.log(pred.address);
-        const tx = await pred
-          .setData(pubKey)
-          .transfer(someAddress, 300, NativeAssetId, {
-            gasLimit: 3000,
-            gasPrice: 1,
-          });
-        await tx.waitForResult();
+        if (predicate) {
+          const tx = await predicate!.
+            setData(pubKey).
+            transfer(inputAddress, amount, NativeAssetId, {gasPrice: 1});
+          const result = await tx.waitForResult();
 
-        setAccount(account);
-        setConnected(true);
+          if (result.status.type =='success') {
+            console.log('success');
+          } else {
+            console.log('fail');
+          }
+
+          // Check balance of someAddress was indeed increased
+          const destinationBalance = await walletInputAddress.getBalance(NativeAssetId);
+          console.log(destinationBalance);
+        }
      } catch(err) {
        console.log("error connecting: ", err);
      }
     }
    }
-
 
   async function btnRegBegin() {
     fetch("/generate-registration-options")
@@ -108,58 +121,25 @@ function App() {
         
         // Create Burner Wallet
         const provider = new Provider('https://beta-3.fuel.network/graphql');
+        setProvider(provider);
         const configurable = { PUBKEY: pubkeyArray };
         const { abi, bin } = PredicateAbi__factory;
-        const predicate = new Predicate(bin, abi, provider, configurable);
-        pred = predicate;
-        pubKey = pubkeyArray;
-        // set predicate data to be the same as the configurable constant
-        predicate.setData(configurable.PUBKEY);
+        const pred = new Predicate(bin, abi, provider, configurable);
+        setBurnerWalletAddress(pred.address.toString());
 
-        console.log("Burner Wallet Address is: " + predicate.address);
+        setPredicate(pred);
+        setPubKey(pubkeyArray);
       })
       .catch((err) => {
         console.error("Error fetching data:", err);
       }); 
   }
 
-  async function btnAuthBegin() {
-
-    const resp = await fetch('/generate-authentication-options');
-
-    let asseResp;
-    try {
-      const opts = await resp.json();
-
-      asseResp = await startAuthentication(opts);
-    } catch (error) {
-      throw error;
-    }
-
-    const verificationResp = await fetch('/verify-authentication', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(asseResp),
-    });
-
-    const verificationJSON = await verificationResp.json();
-    console.log(verificationJSON);
-    if (verificationJSON && verificationJSON.verified) {
-      console.log("Authentication successful");
-    } else {
-      console.error("Authentication failed");
-    }
-
-  }
-  
-
   const handleSubmit = (e: any) => {
     e.preventDefault();
     const addr = e.target.address.value;
-    // console.log(addr);
-    send(addr);
+    const amount = e.target.amount.value;
+    send(addr, amount);
   }
 
   async function checkConnection() {
@@ -180,20 +160,25 @@ function App() {
       <div className="App">
             <>
               <button style={buttonStyle} onClick={btnRegBegin}>
-              Register
+              Create Burner Wallet
               </button><br />
 
-              <button style={buttonStyle} onClick={btnAuthBegin}>
-              Authenticate
-              </button><br />
+              {burnerWalletAddress &&
+                  <div>
+                    <p>Burner Wallet Address:</p> 
+                    <p>{burnerWalletAddress}</p>
+                  </div>
+              }
 
               <button style={buttonStyle} onClick={fundPredicate}>
-              fundPredicate
+              Fund burner wallet (in order to test)
               </button><br /><br />
 
-              <form onSubmit={handleSubmit}><input type="text" name = "address" placeholder ="wallet address" /><br />
+              <form onSubmit={handleSubmit}>
+                <input type="text" name = "address" placeholder ="destination address" /><br /><br />
+                <input type="number" id="amount" name="amount" min="1" placeholder ="transfer amount"></input><br />
               <button style={buttonStyle}><br />
-              send
+              Send funds
               </button>
               </form>
             </>

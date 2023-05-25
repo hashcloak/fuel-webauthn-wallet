@@ -2,9 +2,12 @@ import React, { useEffect, useState } from "react";
 import "@fuel-wallet/sdk";
 import "./App.css";
 import { startRegistration, startAuthentication } from "@simplewebauthn/browser";
-import { Account, Address, JsonFlatAbi, NativeAssetId, Predicate, Provider, Wallet, WalletLocked, WalletUnlocked, getRandomB256, hexlify } from "fuels";
+import { Account, Address, JsonFlatAbi, NativeAssetId, Predicate, Provider, Wallet, WalletLocked, WalletUnlocked, getRandomB256, hexlify, hashMessage, arrayify } from "fuels";
 import { PredicateAbi__factory } from './types';
-
+import { AsnParser } from '@peculiar/asn1-schema';
+import { ECDSASigValue } from '@peculiar/asn1-ecc';
+import base64url from 'base64url';
+import { signature_bytesInput } from "./types/factories/PredicateAbi__factory";
 
 function App() {
   const [connected, setConnected] = useState<boolean>(false);
@@ -14,6 +17,10 @@ function App() {
   const [account, setAccount] = useState<string>("");
   const [provider, setProvider] = useState<Provider>();
   const [burnerWalletAddress, setBurnerWalletAddress] = useState<string>("");
+
+  // const [msgHash, setMsgHash] = useState<any[]>();
+  // const [sigR, setSigR] = useState<any[]>();
+  // const [sigS, setSigS] = useState<any[]>();
 
   useEffect(() => {
     setTimeout(() => {
@@ -35,7 +42,7 @@ function App() {
         console.log(initial);
 
         // Fund the predicate
-        const response1 = await wallet.transfer(predicate!.address, 10000, NativeAssetId, {
+        const response1 = await wallet.transfer(predicate!.address, 100000, NativeAssetId, {
           gasLimit: 164,
           gasPrice: 1,
         });
@@ -59,12 +66,106 @@ function App() {
     const initialBalance = await walletInputAddress.getBalance();
     console.log(initialBalance);
 
+    const resp = await fetch('/generate-authentication-options');
+    
+    let asseResp;
+    try {
+      const opts = await resp.json();
+
+      asseResp = await startAuthentication(opts);
+    } catch (error) {
+      throw error;
+    }
+    const verificationResp = await fetch('/verify-authentication', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(asseResp),
+    });
+
+    const verificationJSON = await verificationResp.json();
+    console.log(verificationJSON);
+
+    if (verificationJSON && verificationJSON.verified) {
+      console.log("Authentication successful");
+    } else {
+      console.error("Authentication failed");
+    }
+
+    global.Buffer = global.Buffer || require('buffer').Buffer;
+    const parsedSignature = AsnParser.parse(
+      base64url.toBuffer(asseResp.response.signature),
+      ECDSASigValue,
+    ); 
+
+    // decode the clientDataJSON into a utf-8 string
+    const utf8Decoder = new TextDecoder('utf-8');
+    const decodedClientData = utf8Decoder.decode(
+      base64url.toBuffer(asseResp.response.clientDataJSON))
+
+    // parse the string as an object
+    const clientDataObj = JSON.parse(decodedClientData);
+
+    // console.log(clientDataObj);
+    // console.log(clientDataObj.challenge);
+    // console.log(hashMessage(clientDataObj.challenge));
+    // console.log(arrayify(hashMessage(clientDataObj.challenge)));
+    // console.log(new TextEncoder().encode(clientDataObj.challenge));
+    // console.log(new Uint8Array(parsedSignature.r));
+    // console.log(new Uint8Array(parsedSignature.s).byteLength);
+
+    //parsing the signature 
+    let s = new Uint8Array(parsedSignature.s);
+    let sig_r = [];
+    if (s.byteLength == 33) {
+        for (let i = 0; i < 32; i++) {
+          sig_r.push(s[i+1]);
+        }
+    }
+    
+    else {
+      for (let i = 0; i < 32; i++) {
+        sig_r.push(s[i]);
+      }
+    }
+    const r_string: string = hexlify(sig_r);
+    console.log(r_string);
+
+    let sig_s = [];
+    if (s.byteLength == 33) {
+        for (let i = 0; i < 32; i++) {
+          sig_s.push(s[i+1]);
+        }
+    }
+    else {
+      for (let i = 0; i < 32; i++) {
+        sig_s.push(s[i]);
+      }
+    }
+    const s_string: string = hexlify(sig_s);
+
+    const msg_hash = arrayify(hashMessage(clientDataObj.challenge));
+    let msg = [];
+
+    for (let i = 0; i < 32; i++) {
+      msg.push(msg_hash[i]);
+    }
+    const msg_string: string = hexlify(msg);
+
+    //input to the predicate
+    const predicateValidation: signature_bytesInput = {
+      msg: msg_string,
+      r: r_string,
+      s: s_string,
+    };
+
     if (window.fuel) {
      try {
       await window.fuel.connect();
         if (predicate) {
           const tx = await predicate!.
-            setData(pubKey).
+            setData(predicateValidation).
             transfer(inputAddress, amount, NativeAssetId, {gasPrice: 1});
           const result = await tx.waitForResult();
 
@@ -113,12 +214,18 @@ function App() {
           console.error("Registration failed");
         }
 
+        // Extracting public key from COSE_Key-encoded ecc key
+        // https://www.w3.org/TR/2021/REC-webauthn-2-20210408/ section 6.5.1.1
         let pubkeyArray = [];
-        for (let i = 0; i < 72; i++) {
+        for (let i = 10; i < 42; i++) {
           pubkeyArray.push(verificationJSON.pubkey[i]);
         }
+        for (let i = 45; i < 77; i++) {
+          pubkeyArray.push(verificationJSON.pubkey[i]);
+        }
+
         console.log(pubkeyArray);
-        
+
         // Create Burner Wallet
         const provider = new Provider('https://beta-3.fuel.network/graphql');
         setProvider(provider);

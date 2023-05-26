@@ -85,7 +85,7 @@ function App() {
     });
 
     const verificationJSON = await verificationResp.json();
-    console.log(verificationJSON);
+    // console.log(verificationJSON);
 
     if (verificationJSON && verificationJSON.verified) {
       console.log("Authentication successful");
@@ -117,20 +117,22 @@ function App() {
 
     //parsing the signature 
     let s = new Uint8Array(parsedSignature.s);
+    let r = new Uint8Array(parsedSignature.r);
+
     let sig_r = [];
-    if (s.byteLength == 33) {
+    if (r.byteLength == 33) {
         for (let i = 0; i < 32; i++) {
-          sig_r.push(s[i+1]);
+          sig_r.push(r[i+1]);
         }
     }
     
     else {
       for (let i = 0; i < 32; i++) {
-        sig_r.push(s[i]);
+        sig_r.push(r[i]);
       }
     }
     const r_string: string = hexlify(sig_r);
-    console.log(r_string);
+
 
     let sig_s = [];
     if (s.byteLength == 33) {

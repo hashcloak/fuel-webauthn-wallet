@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import "@fuel-wallet/sdk";
 import "./App.css";
 import { startRegistration, startAuthentication } from "@simplewebauthn/browser";
-import { Account, Address, JsonFlatAbi, NativeAssetId, Predicate, Provider, Wallet, WalletLocked, WalletUnlocked, getRandomB256, hexlify, hashMessage, arrayify, BN, bn, BigNumberish } from "fuels";
+import { Account, Address, JsonFlatAbi, NativeAssetId, Predicate, Provider, Wallet, WalletLocked, WalletUnlocked, getRandomB256, hexlify, hashMessage, arrayify, BN, bn, BigNumberish, Script, Contract, AbstractContract, ContractFactory } from "fuels";
 import { PredicateAbi__factory } from './types';
 import { AsnParser } from '@peculiar/asn1-schema';
 import { ECDSASigValue } from '@peculiar/asn1-ecc';
@@ -10,8 +10,9 @@ import base64url from 'base64url';
 // import { signature_bytesInput } from "./types/factories/PredicateAbi__factory";
 // 
 import { ContractAbi__factory } from "./contracts";
-import { AffinePointInput, FieldElementInput, PublicKeyInput, ScalarInput, SignatureInput } from "./contracts/ContractAbi";
-import { VerifyPublicKeyInput } from "crypto";
+import { AffinePointInput, ContractAbi, FieldElementInput, PublicKeyInput, ScalarInput, SignatureInput } from "./contracts/ContractAbi";
+import { VerifyPublicKeyInput, sign } from "crypto";
+import { ScriptAbi__factory } from "./script_types";
 
 // The address of the contract deployed the Fuel testnet
 const CONTRACT_ID =
@@ -22,6 +23,8 @@ function App() {
   const [connected, setConnected] = useState<boolean>(false);
   const [pubKey, setPubKey] = useState<any[]>();
   const [predicate, setPredicate] = useState<Predicate<any>>();
+  const [script, setScript] = useState<Script<any, any>>();
+  const [contract, setContract] = useState<ContractAbi>();
   const [loaded, setLoaded] = useState(false);
   const [account, setAccount] = useState<string>("");
   const [provider, setProvider] = useState<Provider>();
@@ -186,19 +189,79 @@ function App() {
     if (window.fuel) {
      try {
       await window.fuel.connect();
-        if (predicate) {
-          const tx = await predicate!.
-            setData(pubKey).
-            transfer(inputAddress, amount, NativeAssetId, {gasPrice: 1});
-          const result = await tx.waitForResult();
+      // Invoke script
+        if (script) {
 
-          if (result.status.type =='success') {
-            console.log('success');
-          } else {
-            console.log('fail');
-          }
+          let hash1 = '0xaf2bdbe1aa9b6ec1e2ade1d694f41fc71a831d0268e9891562113d8a62add1bf';
+          // [
+          //   175, 43, 219, 225, 170, 155, 110, 193, 226, 173, 225, 214, 148, 244, 31, 199, 26, 131,
+          //   29, 2, 104, 233, 137, 21, 98, 17, 61, 138, 98, 173, 209, 191,
+          // ];
+          const x: FieldElementInput = {
+            ls: [
+                bn([182, 159, 242, 96, 46, 98, 105, 230]), // 16602909452612575158
+                bn([230, 105, 98, 46, 96, 242, 159, 182]), // 16602909452612575158 THIS WORKS
+                // bn([108, 250, 97, 59, 146, 184, 73, 192]), //13855808666783054444
+                bn([104, 109, 53, 198, 116, 235, 97, 201]),//14511138361138572648,
+                bn([49, 157, 90, 37, 186, 212, 254, 96])//6989257567681289521,
+            ],
+          };
+          const y: FieldElementInput = {
+            ls: [
+              bn([153, 34, 70, 212, 148, 194, 163, 119]), //8620948056189575833
+              bn([81, 159, 126, 45, 12, 178, 241, 242]), //17505968991938453329
+              bn([100, 188, 40, 86, 233, 233, 26, 164]), //11825020959996820580
+              bn([153, 188, 184, 8, 16, 254, 3, 121]) //8720092648338668697
+            ],
+          };
+          const a: AffinePointInput = {
+            x: x, y: y, infinity: 0
+          };
+          const p: PublicKeyInput = {
+            point: a
+          };
+          const vk = {
+            inner: p,
+          };
+  
+          let r1 : ScalarInput = {
+            ls: [
+              bn([22, 55, 175, 78, 168, 14, 77, 195]),//14072920526640068374
+              bn([145, 249, 170, 86, 123, 135, 44, 157]),//11325576126734727569
+              bn([214, 129, 94, 212, 156, 221, 64, 17]),//1243237162801856982
+              bn([253, 168, 182, 172, 42, 139, 212, 239])//17281590685529975037
+            ],
+          };
+          let s1 : ScalarInput = {
+              ls: [
+                bn([168, 205, 58, 132, 47, 171, 196, 77]),//5603792056925998504
+                bn([6, 244, 175, 185, 219, 0, 233, 243]),//17575579964503225350
+                bn([101, 159, 226, 182, 161, 199, 54, 212]),//15291629082155065189
+                bn([65, 124, 101, 45, 148, 28, 203, 247])//17855396570382826561
+              ],
+          };
+          let sign1 : SignatureInput = { r: r1, s: s1 };
+          //old params p, sign1, msg
+          const res = await script!.functions.main(p, sign1, msg)
+              .txParams({ gasPrice: 1, gasLimit: 500000000})
+              .addContracts([contract! as Contract])
+              .call();
+          // console.log(value); //42,0,0 WORKS!!!!
+          // So what works now is calling a script that calls the contract CONTINUE HERE
+          console.log(res);
 
-          // Check balance of someAddress was indeed increased
+          // const tx = await predicate!.
+          //   setData(pubKey).
+          //   transfer(inputAddress, amount, NativeAssetId, {gasPrice: 1});
+          // const result = await tx.waitForResult();
+
+          // if (result.status.type =='success') {
+          //   console.log('success');
+          // } else {
+          //   console.log('fail');
+          // }
+
+          // TODO WHEN IT WORKS Check balance of someAddress was indeed increased
           const destinationBalance = await walletInputAddress.getBalance(NativeAssetId);
           console.log(destinationBalance);
         }
@@ -247,17 +310,39 @@ function App() {
           pubkeyArray.push(verificationJSON.pubkey[i]);
         }
         console.log(pubkeyArray);
-        
-        // Create Burner Wallet
-        const provider = new Provider('https://beta-3.fuel.network/graphql');
-        setProvider(provider);
-        const configurable = { PUBKEY: pubkeyArray };
-        const { abi, bin } = PredicateAbi__factory;
-        const pred = new Predicate(bin, abi, provider, configurable);
-        setBurnerWalletAddress(pred.address.toString());
 
-        setPredicate(pred);
-        setPubKey(pubkeyArray);
+        // USING PREDICATE
+        // Create Burner Wallet
+        // const provider = new Provider('https://beta-3.fuel.network/graphql');
+        // setProvider(provider);
+        // const configurable = { PUBKEY: pubkeyArray };
+        // const { abi, bin } = PredicateAbi__factory;
+        // const pred = new Predicate(bin, abi, provider, configurable);
+
+        // setBurnerWalletAddress(pred.address.toString());
+
+        // setPredicate(pred);
+        // setPubKey(pubkeyArray);
+        if (window.fuel) {
+
+          const wallet = await window.fuel.getWallet(account);
+
+          // CREATE SCRIPT
+          const provider = new Provider('https://beta-3.fuel.network/graphql');
+          setProvider(provider);
+          const configurable = { PUBKEY: pubkeyArray };
+          const { abi, bin } = ScriptAbi__factory;
+          const script = new Script(bin, abi, wallet);
+          // script.setConfigurableConstants(configurable);
+          
+          console.log(script.functions);
+
+          // THIS IS WRONG, IT JUST TAKES THE SAME WALLET ADDRESS
+          setBurnerWalletAddress(wallet.address.toString());
+
+          setScript(script);
+          setPubKey(pubkeyArray);
+        }
       })
       .catch((err) => {
         console.error("Error fetching data:", err);
@@ -286,57 +371,63 @@ function App() {
     if (window.fuel) {
       const wallet = await window.fuel.getWallet(account);
       const contract = ContractAbi__factory.connect(CONTRACT_ID, wallet);
+      
+      setContract(contract);
       console.log('Contract connected')
-      try {
-        let hash1 = '0xaf2bdbe1aa9b6ec1e2ade1d694f41fc71a831d0268e9891562113d8a62add1bf';
-        // [
-        //   175, 43, 219, 225, 170, 155, 110, 193, 226, 173, 225, 214, 148, 244, 31, 199, 26, 131,
-        //   29, 2, 104, 233, 137, 21, 98, 17, 61, 138, 98, 173, 209, 191,
-        // ];
-        const x: FieldElementInput = {
-          ls: [
-              bn([182, 159, 242, 96, 46, 98, 105, 230]), // 16602909452612575158
-              bn([108, 250, 97, 59, 146, 184, 73, 192]), //13855808666783054444
-              bn([104, 109, 53, 198, 116, 235, 97, 201]),//14511138361138572648,
-              bn([49, 157, 90, 37, 186, 212, 254, 96])//6989257567681289521,
-          ],
-        };
-        const y: FieldElementInput = {
-          ls: [
-            bn([153, 34, 70, 212, 148, 194, 163, 119]), //8620948056189575833
-            bn([81, 159, 126, 45, 12, 178, 241, 242]), //17505968991938453329
-            bn([100, 188, 40, 86, 233, 233, 26, 164]), //11825020959996820580
-            bn([153, 188, 184, 8, 16, 254, 3, 121]) //8720092648338668697
-          ],
-        };
-        const a: AffinePointInput = {
-          x: x, y: y, infinity: 0
-        };
-        const p: PublicKeyInput = {
-          point: a
-        };
-        const vk = {
-          inner: p,
-        };
 
-        let r1 : ScalarInput = {
+      let hash1 = '0xaf2bdbe1aa9b6ec1e2ade1d694f41fc71a831d0268e9891562113d8a62add1bf';
+      // [
+      //   175, 43, 219, 225, 170, 155, 110, 193, 226, 173, 225, 214, 148, 244, 31, 199, 26, 131,
+      //   29, 2, 104, 233, 137, 21, 98, 17, 61, 138, 98, 173, 209, 191,
+      // ];
+
+      // TODO How to get the right values here?
+      const fe_x: FieldElementInput = {
+        ls: [
+            bn([182, 159, 242, 96, 46, 98, 105, 230]), // 16602909452612575158
+            bn([108, 250, 97, 59, 146, 184, 73, 192]), //13855808666783054444
+            bn([104, 109, 53, 198, 116, 235, 97, 201]),//14511138361138572648,
+            bn([49, 157, 90, 37, 186, 212, 254, 96])//6989257567681289521,
+        ],
+      };
+      const fe_y: FieldElementInput = {
+        ls: [
+          bn([153, 34, 70, 212, 148, 194, 163, 119]), //8620948056189575833
+          bn([81, 159, 126, 45, 12, 178, 241, 242]), //17505968991938453329
+          bn([100, 188, 40, 86, 233, 233, 26, 164]), //11825020959996820580
+          bn([153, 188, 184, 8, 16, 254, 3, 121]) //8720092648338668697
+        ],
+      };
+      const a: AffinePointInput = {
+        x: fe_x, y: fe_y, infinity: 0
+      };
+      const pubkey: PublicKeyInput = {
+        point: a
+      };
+      const vk = {
+        inner: pubkey,
+      };
+
+      let r1 : ScalarInput = {
+        ls: [
+          bn([22, 55, 175, 78, 168, 14, 77, 195]),//14072920526640068374
+          bn([145, 249, 170, 86, 123, 135, 44, 157]),//11325576126734727569
+          bn([214, 129, 94, 212, 156, 221, 64, 17]),//1243237162801856982
+          bn([253, 168, 182, 172, 42, 139, 212, 239])//17281590685529975037
+        ],
+      };
+      let s1 : ScalarInput = {
           ls: [
-            bn([22, 55, 175, 78, 168, 14, 77, 195]),//14072920526640068374
-            bn([145, 249, 170, 86, 123, 135, 44, 157]),//11325576126734727569
-            bn([214, 129, 94, 212, 156, 221, 64, 17]),//1243237162801856982
-            bn([253, 168, 182, 172, 42, 139, 212, 239])//17281590685529975037
+            bn([168, 205, 58, 132, 47, 171, 196, 77]),//5603792056925998504
+            bn([6, 244, 175, 185, 219, 0, 233, 243]),//17575579964503225350
+            bn([101, 159, 226, 182, 161, 199, 54, 212]),//15291629082155065189
+            bn([65, 124, 101, 45, 148, 28, 203, 247])//17855396570382826561
           ],
-        };
-        let s1 : ScalarInput = {
-            ls: [
-              bn([168, 205, 58, 132, 47, 171, 196, 77]),//5603792056925998504
-              bn([6, 244, 175, 185, 219, 0, 233, 243]),//17575579964503225350
-              bn([101, 159, 226, 182, 161, 199, 54, 212]),//15291629082155065189
-              bn([65, 124, 101, 45, 148, 28, 203, 247])//17855396570382826561
-            ],
-        };
-        let sign1 : SignatureInput = { r: r1, s: s1 };
-        let res = await contract.functions.verify_signature(p, sign1, hash1).txParams({ gasPrice: 1, gasLimit: 199999685}).call();
+      };
+      let sign1 : SignatureInput = { r: r1, s: s1 };
+      
+      try {
+        let res = await contract.functions.verify_signature(pubkey, sign1, hash1).txParams({ gasPrice: 1, gasLimit: 500000000}).call();
         console.log('signature verified called');
         console.log(res);
       } catch(err) {

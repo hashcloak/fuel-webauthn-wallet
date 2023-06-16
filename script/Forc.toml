@@ -1,0 +1,8 @@
+[project]
+authors = ["Elena"]
+entry = "main.sw"
+license = "Apache-2.0"
+name = "script"
+
+[dependencies]
+p256 = { path = "../p256" }

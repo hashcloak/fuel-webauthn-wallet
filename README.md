@@ -26,7 +26,9 @@ The codebase consists of 3 parts:
 - frontend; the visual part that ties it all together. Calls both the server that does WebAuthn stuff & creates the predicate that is the burner wallet
 
 
-### 1. Predicate code
+### 1a. Predicate code
+
+THIS WAS SOLUTION OPTION A, WHICH DOESN'T WORK WITH CURRENT STATE OF ECOSYSTEM.
 
 Reference [here](https://fuellabs.github.io/fuels-ts/guide/predicates/). Build the predicate:
 
@@ -45,6 +47,30 @@ npx fuels typegen -i ../**/**/*-abi.json  -o ./src/types --predicate
 Make sure that in `frontend/src/types/index.ts` only 1 line similar to:
 `
 export { PredicateAbi__factory } from './factories/PredicateAbi__factory';
+`
+exists. Remove any redundant lines. 
+
+### 1B. Script code
+
+Solution B: have the verification in a smart contract, and let the script call the verification function. The predicate should use/verify execution of script. 
+
+Build the script:
+
+```
+cd script
+forc build
+```
+
+Then generate the necessary files for the frontend based on the script:
+```
+cd ../frontend
+npm install
+npx fuels typegen -i ../**/**/script-abi.json  -o ./src/script_types --script
+```
+
+Make sure that in `frontend/src/script_types/index.ts` only 1 line similar to:
+`
+export { ContractAbi__factory } from './factories/ContractAbi__factory';
 `
 exists. Remove any redundant lines. 
 

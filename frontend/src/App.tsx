@@ -102,10 +102,11 @@ function App() {
       body: JSON.stringify(asseResp),
     });
 
-    const verificationJSON = await verificationResp.json();
-    // console.log(verificationJSON);
-
-    if (verificationJSON && verificationJSON.verified) {
+    const authResponse = await verificationResp.json();
+    console.log(authResponse.verified);
+    console.log(authResponse.hashedSignatureBase);
+    
+    if (authResponse.verified) {
       console.log("Authentication successful");
     } else {
       console.error("Authentication failed");
@@ -161,35 +162,25 @@ function App() {
     let msg = [];
 
     for (let i = 0; i < 32; i++) {
-      msg.push(msg_hash[i]);
+      msg.push(authResponse.hashedSignatureBase[i]);
     }
     const msg_string: string = hexlify(msg);
 
     console.log(msg_string);
     console.log(r_string);
     console.log(s_string);
-    /*
-    0xd489d2839a0521a1094dd62eef579a3571169e14961d25899efc008738951dd0
-    0x4728bed0f88c1a7b46c192dff9a81098c4795b77a5d92bf2a8c564336a5994eb
-    0xb49cf2e3ab2ba820c2b229025ec8102a2ad74b94e81ed3d38ca674ec77cfabc2
-    */
-
     if (window.fuel) {
      try {
       await window.fuel.connect();
       // Invoke script
         if (script) {
-          // FYI 
-          // u64 = 16602909452612575158
-          // equals bn([230, 105, 98, 46, 96, 242, 159, 182])
-          
           const wallet = await window.fuel.getWallet(account);
           const contract = ContractAbi__factory.connect(CONTRACT_ID, wallet);
       
           setContract(contract);
           console.log('Contract connected')
 
-          const res = await script!.functions.main(pubKey, r_string, s_string, msg_string)
+          const res = await script!.functions.main(pubKey, r_string, s_string, msg)
               .txParams({ gasPrice: 1, gasLimit: 500000000})
               .addContracts([contract! as Contract])
               .call();

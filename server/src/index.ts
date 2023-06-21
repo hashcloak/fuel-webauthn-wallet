@@ -260,6 +260,7 @@ app.post('/verify-authentication', async (req, res) => {
 
   let dbAuthenticator;
   const bodyCredIDBuffer = base64url.toBuffer(body.rawId);
+  let signatureBase: Uint8Array;
   // "Query the DB" here for an authenticator matching `credentialID`
   for (const dev of user.devices) {
     if (isoUint8Array.areEqual(dev.credentialID, bodyCredIDBuffer)) {
@@ -287,7 +288,7 @@ app.post('/verify-authentication', async (req, res) => {
     const authDataBuffer = isoBase64URL.toBuffer(body.response.authenticatorData);
     const clientDataHash = await toHash(base64url.toBuffer(body.response.clientDataJSON));
 
-    const signatureBase = concat([authDataBuffer, clientDataHash]);
+    signatureBase = concat([authDataBuffer, clientDataHash]);
 
     // 2. Retrieving the r and s values, see https://github.com/MasterKale/SimpleWebAuthn/blob/6f363aa53a69cf8c1ea69664924c1e9f8e19dc4e/packages/server/src/helpers/iso/isoCrypto/verifyEC2.ts#L103
     const parsedSignature = AsnParser.parse(
@@ -325,8 +326,9 @@ app.post('/verify-authentication', async (req, res) => {
   }
 
   req.session.currentChallenge = undefined;
-
-  res.send({ verified });
+  
+  let hashedSignatureBase = await toHash(signatureBase);
+  res.send({ verified, hashedSignatureBase });
 });
 
 if (ENABLE_HTTPS) {

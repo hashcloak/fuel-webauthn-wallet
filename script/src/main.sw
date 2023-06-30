@@ -12,9 +12,6 @@ use p256::{
     }
 };
 
-use std::constants::ZERO_B256;
-use std::logging::log;
-
 
 configurable {
     PUBKEY: [u8; 64] = [0u8; 64]
@@ -49,7 +46,7 @@ abi P256SignatureVerification {
   fn verify_signature(pubkey: PublicKey, sign: Signature, msg: b256) -> bool;
 }
 
-fn getPubkey() -> PublicKey {
+fn get_pubkey() -> PublicKey {
     let mut pub_x_bytes = [0u8;32];
     let mut pub_y_bytes = [0u8;32];
 
@@ -84,7 +81,5 @@ fn main(pubkey: [u8; 64], r: b256, s: b256, msg: b256) -> bool {
     let contract_address = 0xc433fa483a6b91c1e48f84c648ee00b0bf469a38ed65c1cad595842ea3b0bf68;
     let caller = abi(P256SignatureVerification, contract_address);
 
-    return caller.verify_signature{gas: 500000000}(getPubkey(), sign, msg);
+    return caller.verify_signature{gas: 500000000}(get_pubkey(), sign, msg);
 }
-
-// TODO decide what parts are done in script and what parts in predicate (PUBKEY check, data conversion)

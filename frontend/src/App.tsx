@@ -2,12 +2,11 @@ import React, { useEffect, useState } from "react";
 import "@fuel-wallet/sdk";
 import "./App.css";
 import { startRegistration, startAuthentication } from "@simplewebauthn/browser";
-import { Address, NativeAssetId, Predicate, Provider, Wallet, hexlify, hashMessage, arrayify, Script, Contract } from "fuels";
+import { Address, NativeAssetId, Provider, Wallet, hexlify, hashMessage, arrayify, Script, Contract } from "fuels";
 import { AsnParser } from '@peculiar/asn1-schema';
 import { ECDSASigValue } from '@peculiar/asn1-ecc';
 import base64url from 'base64url';
-// import { signature_bytesInput } from "./types/factories/PredicateAbi__factory";
-// 
+
 import { ContractAbi, ContractAbi__factory } from "./contracts";
 import { ScriptAbi__factory } from "./script_types";
 
@@ -19,12 +18,13 @@ const CONTRACT_ID =
 function App() {
   const [connected, setConnected] = useState<boolean>(false);
   const [pubKey, setPubKey] = useState<any[]>();
-  const [predicate, setPredicate] = useState<Predicate<any>>();
   const [script, setScript] = useState<Script<any, any>>();
   const [contract, setContract] = useState<ContractAbi>();
   const [loaded, setLoaded] = useState(false);
   const [account, setAccount] = useState<string>("");
   const [provider, setProvider] = useState<Provider>();
+  // TODO: currently the Burner Wallet doesn't have an address, since a script doesn't have an address.
+  // When a predicate can be connected to this workflow, the predicate address is the burner wallet address
   const [burnerWalletAddress, setBurnerWalletAddress] = useState<string>("");
 
   
@@ -42,42 +42,80 @@ function App() {
        const [account] = await window.fuel.accounts();
        setAccount(account);
        setConnected(true);
+       console.log("Connected Fuel Wallet.")
      } catch(err) {
        console.log("error connecting: ", err);
      }
     }
    }
 
-  async function fundPredicate() {
-    if (window.fuel) {
-     try {
-        await window.fuel.connect();
-        const [account] = await window.fuel.accounts();
-        const wallet = await window.fuel!.getWallet(account);
+  // Register with WebAuthn, obtaining a public key
+  async function btnRegBegin() {
+    fetch("/generate-registration-options")
+      .then(async (res) => {
+        const resp = await fetch('/generate-registration-options');
 
-        const walletPredicate = Wallet.fromAddress(predicate!.address, provider);
-        const initial = await walletPredicate.getBalance();
-        console.log(initial);
+        let attResp;
+        try {
+          const opts = await resp.json();
+          attResp = await startRegistration(opts);
+        } catch (error) {
+          throw error;
+        }
 
-        // Fund the predicate
-        const response1 = await wallet.transfer(predicate!.address, 10000, NativeAssetId, {
-          gasLimit: 164,
-          gasPrice: 1,
+        const verificationResp = await fetch('/verify-registration', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(attResp),
         });
-        await response1.wait();
-        const after = await walletPredicate.getBalance();
-        console.log(after);
 
-        console.log("predicateAddress from fundPredicate: " + predicate?.address);
-        setAccount(account);
-        setConnected(true);
-     } catch(err) {
-       console.log("error connecting: ", err);
-     }
-    }
-   }
+        const verificationJSON = await verificationResp.json();
 
-   async function send(addr: any, amount: number) {
+        if (verificationJSON && verificationJSON.verified) {
+          console.log("Registration successful");
+        } else {
+          console.error("Registration failed");
+        }
+
+        // Extracting public key from COSE_Key-encoded ecc key
+        // https://www.w3.org/TR/2021/REC-webauthn-2-20210408/ section 6.5.1.1
+        let pubkeyArray = [];
+        for (let i = 10; i < 42; i++) {
+          pubkeyArray.push(verificationJSON.pubkey[i]);
+        }
+        for (let i = 45; i < 77; i++) {
+          pubkeyArray.push(verificationJSON.pubkey[i]);
+        }
+        console.log("Public key: " + pubkeyArray);
+
+        if (window.fuel) {
+
+          const wallet = await window.fuel.getWallet(account);
+
+          // CREATE SCRIPT + SET PUBKEY
+          const provider = new Provider('https://beta-3.fuel.network/graphql');
+          setProvider(provider);
+          const configurable = { PUBKEY: pubkeyArray };
+          const { abi, bin } = ScriptAbi__factory;
+          const script = new Script(bin, abi, wallet);
+          script.setConfigurableConstants(configurable);
+          
+          setScript(script);
+          setPubKey(pubkeyArray);
+
+          console.log("Script was created with pubkey.");
+        }
+      })
+      .catch((err) => {
+        console.error("Error fetching data:", err);
+      }); 
+  }
+
+  // Authenticate with WebAuthn, obtaining a signature 
+  //   which is sent to the script for verification
+  async function send(addr: any, amount: number) {
     const inputAddress = Address.fromDynamicInput(addr);
     const walletInputAddress = Wallet.fromAddress(inputAddress, provider);
     // Print destination wallet balance before transaction
@@ -144,7 +182,6 @@ function App() {
     }
     const r_string: string = hexlify(sig_r);
 
-
     let sig_s = [];
     if (s.byteLength == 33) {
         for (let i = 0; i < 32; i++) {
@@ -172,7 +209,7 @@ function App() {
     if (window.fuel) {
      try {
       await window.fuel.connect();
-      // Invoke script
+      // Invoke script for verification of signature
         if (script) {
           const wallet = await window.fuel.getWallet(account);
           const contract = ContractAbi__factory.connect(CONTRACT_ID, wallet);
@@ -185,8 +222,13 @@ function App() {
               .addContracts([contract! as Contract])
               .call();
           console.log(res);
+          if (res.value.words[0] == 1) {
+            console.log("Signature verification true");
+          } else {
+            console.log("Signature verification false");
+          }
 
-          // TODO WHEN IT WORKS Check balance of someAddress was indeed increased
+          // TODO when actual transfer of funds is added: Check balance of someAddress was indeed increased
           const destinationBalance = await walletInputAddress.getBalance(NativeAssetId);
           console.log(destinationBalance);
         }
@@ -194,73 +236,6 @@ function App() {
        console.log("error connecting: ", err);
      }
     }
-   }
-
-  async function btnRegBegin() {
-    fetch("/generate-registration-options")
-      .then(async (res) => {
-        const resp = await fetch('/generate-registration-options');
-
-        let attResp;
-        try {
-          const opts = await resp.json();
-          attResp = await startRegistration(opts);
-        } catch (error) {
-          throw error;
-        }
-
-        const verificationResp = await fetch('/verify-registration', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(attResp),
-        });
-
-        const verificationJSON = await verificationResp.json();
-
-        if (verificationJSON && verificationJSON.verified) {
-          console.log("Registration successful");
-        } else {
-          console.error("Registration failed");
-        }
-
-        // Extracting public key from COSE_Key-encoded ecc key
-        // https://www.w3.org/TR/2021/REC-webauthn-2-20210408/ section 6.5.1.1
-        let pubkeyArray = [];
-        for (let i = 10; i < 42; i++) {
-          pubkeyArray.push(verificationJSON.pubkey[i]);
-        }
-        for (let i = 45; i < 77; i++) {
-          pubkeyArray.push(verificationJSON.pubkey[i]);
-        }
-        console.log(pubkeyArray);
-
-        if (window.fuel) {
-
-          const wallet = await window.fuel.getWallet(account);
-
-          // CREATE SCRIPT + SET PUBKEY
-          const provider = new Provider('https://beta-3.fuel.network/graphql');
-          setProvider(provider);
-          const configurable = { PUBKEY: pubkeyArray };
-          const { abi, bin } = ScriptAbi__factory;
-          const script = new Script(bin, abi, wallet);
-          script.setConfigurableConstants(configurable);
-          
-          console.log(script.functions);
-
-          // TODO create predicate and let that be the burner address
-          // The predicate calls the script or verifies that the script was executed
-          // setBurnerWalletAddress();
-
-          setScript(script);
-          setPubKey(pubkeyArray);
-        }
-      })
-      .catch((err) => {
-        console.error("Error fetching data:", err);
-      }); 
   }
 
   const handleSubmit = (e: any) => {
@@ -281,7 +256,6 @@ function App() {
     }
   }
 
-
   if (!loaded) return null
 
   return (
@@ -301,9 +275,7 @@ function App() {
                   </div>
               }
 
-              {/* <button style={buttonStyle} onClick={fundPredicate}>
-              Fund burner wallet (in order to test)
-              </button><br /><br /> */}
+              <br></br>
 
               <form onSubmit={handleSubmit}>
                 <input type="text" name = "address" placeholder ="destination address" /><br /><br />

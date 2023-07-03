@@ -4,6 +4,8 @@
   "private": true,
   "dependencies": {
     "@fuel-wallet/sdk": "^0.7.2",
+    "@peculiar/asn1-ecc": "^2.3.6",
+    "@peculiar/asn1-schema": "^2.3.6",
     "@simplewebauthn/browser": "^7.2.0",
     "@testing-library/jest-dom": "^5.16.5",
     "@testing-library/react": "^13.4.0",
@@ -12,6 +14,8 @@
     "@types/node": "^16.18.25",
     "@types/react": "^18.2.5",
     "@types/react-dom": "^18.2.3",
+    "base64url": "^3.0.1",
+    "buffer": "^6.0.3",
     "fuels": "^0.44.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -45,6 +49,8 @@
   },
   "proxy": "http://127.0.0.1:8000",
   "compilerOptions": {
-    "types": ["@fuel-wallet/sdk"]
+    "types": [
+      "@fuel-wallet/sdk"
+    ]
   }
 }

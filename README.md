@@ -35,6 +35,14 @@ For loading both script and contract a Fuel wallet is required. When the Fuel wa
 
 ## Build & Run
 
+### 0. Update submodule
+
+This repo uses the `p256` functionality of `fuel-crypto` library. 
+
+```
+git submodule update --init --recursive
+```
+
 ### 1. Script code
 
 Note: Tested with Sway version `0.39.1`.

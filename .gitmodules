@@ -1,0 +1,4 @@
+[submodule "fuel-crypto"]
+	path = fuel-crypto
+	url = https://github.com/hashcloak/fuel-crypto
+  branch = p256
